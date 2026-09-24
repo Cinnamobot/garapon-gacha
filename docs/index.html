@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>くじ引き</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="bg-fx" aria-hidden="true">
+    <div class="bg-rays"></div>
+    <div id="floaters"></div>
+  </div>
+
+  <div id="app">
+    <header class="topbar">
+      <div class="day-badge" id="dayBadge">1日目</div>
+      <h1 id="title">くじ引き</h1>
+      <div class="top-actions">
+        <button id="soundBtn" class="icon-btn" title="効果音 ON/OFF" aria-label="効果音">🔊</button>
+        <button id="fullscreenBtn" class="icon-btn" title="全画面表示" aria-label="全画面"><svg viewBox="0 0 24 24" width="55%" height="55%" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+        <button id="adminBtn" class="icon-btn" title="管理メニュー" aria-label="管理メニュー">⚙</button>
+      </div>
+    </header>
+
+    <main class="stage">
+      <section class="machine-area">
+        <div id="mash" class="mash hidden">
+          <div class="mash-label" id="mashLabel">連打でパワーをためろ!!</div>
+          <div class="mash-row">
+            <div class="gauge"><div class="gauge-fill" id="gaugeFill"></div></div>
+            <div class="mash-count" id="mashCount">0</div>
+          </div>
+        </div>
+        <svg id="garapon" viewBox="0 0 600 540" aria-label="ガラポン"></svg>
+        <button id="startBtn" class="start-btn">くじスタート！</button>
+        <p class="hint">スタート後は <b>連打でも 押しっぱなしでもOK</b>！　スペースキー / Enter でもスタートできます</p>
+      </section>
+
+      <aside class="remain-panel" id="remainPanel">
+        <h2 class="panel-title">当たり景品</h2>
+        <ul id="remainList" class="remain-list"></ul>
+        <p id="remainEmpty" class="remain-empty hidden">当たりはすべて出ました！<br>ありがとうございました！</p>
+      </aside>
+    </main>
+
+    <div class="ticker" aria-hidden="true"><div class="ticker-track" id="ticker"></div></div>
+  </div>
+
+  <!-- 回転中の集中線・予告カットイン -->
+  <div id="speedLines" class="speed-lines hidden"></div>
+  <div id="blackout" class="blackout hidden"></div>
+  <div id="cutin" class="cutin hidden"><div class="cutin-band"><span id="cutinText"></span></div></div>
+
+  <!-- ガチャ風カプセル -->
+  <div id="capsule" class="capsule-stage hidden">
+    <div class="cap-rays" id="capRays"></div>
+    <div class="stage-flash" id="capFlash"></div>
+    <div class="capsule-wrap" id="capWrap"><div class="capsule r-white" id="capBall">?</div></div>
+    <div class="capsule-label" id="capLabel"></div>
+    <div class="capsule-hint">タップで開けろ!!</div>
+  </div>
+
+  <!-- 結果表示 -->
+  <div id="result" class="overlay hidden" role="dialog" aria-live="assertive">
+    <div class="rays"></div>
+    <div class="flash"></div>
+    <div class="result-card">
+      <div class="result-rank" id="resultRank"></div>
+      <div class="result-sub" id="resultSub"></div>
+      <div class="result-ball"></div>
+      <div class="result-name" id="resultName"></div>
+      <div class="result-item" id="resultItem"></div>
+      <div class="result-msg" id="resultMsg"></div>
+      <div class="result-no" id="resultNo"></div>
+      <div class="result-hint">画面タッチ / スペースキーで閉じる</div>
+    </div>
+  </div>
+
+  <canvas id="fx"></canvas>
+
+  <!-- パスワード入力 -->
+  <div id="pinDialog" class="modal hidden">
+    <form class="modal-box pin-box" id="pinForm" autocomplete="off">
+      <h2>管理者パスワード</h2>
+      <input type="password" id="pinInput" inputmode="numeric" autocomplete="off">
+      <p class="pin-error" id="pinError"></p>
+      <div class="keypad" id="keypad">
+        <button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button>
+        <button type="button" data-k="4">4</button><button type="button" data-k="5">5</button><button type="button" data-k="6">6</button>
+        <button type="button" data-k="7">7</button><button type="button" data-k="8">8</button><button type="button" data-k="9">9</button>
+        <button type="button" data-k="clear">C</button><button type="button" data-k="0">0</button><button type="button" data-k="back">←</button>
+      </div>
+      <div class="row">
+        <button type="button" class="btn" id="pinCancel">キャンセル</button>
+        <button type="submit" class="btn primary">OK</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- 管理メニュー -->
+  <div id="admin" class="modal hidden" role="dialog">
+    <div class="modal-box admin-box">
+      <header class="admin-head">
+        <h2>管理メニュー</h2>
+        <button class="close-x" id="adminClose" aria-label="閉じる">×</button>
+      </header>
+      <nav class="tabs" id="adminTabs">
+        <button data-tab="status">残数・状況</button>
+        <button data-tab="prizes">景品設定</button>
+        <button data-tab="day">日付・リセット</button>
+        <button data-tab="history">履歴・集計</button>
+        <button data-tab="settings">その他</button>
+      </nav>
+      <div class="tab-body" id="adminBody"></div>
+    </div>
+  </div>
+  <input type="file" id="importFile" accept="application/json,.json" class="hidden">
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+node_modules/
+.tmp-media/
+提出物/
+要件.md
+*.tmp
+*.tmpv
+*.tmpv2
