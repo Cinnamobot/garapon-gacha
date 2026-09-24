@@ -4,16 +4,24 @@
 外部ライブラリ・画像・音声ファイルは一切使わず、`index.html` + `js/app.js` + `css/style.css` だけで動きます（効果音も演出もプログラムで生成）。
 
 - **デモ（GitHub Pages）**: <https://cinnamobot.github.io/garapon-gacha/>
-- **アプリ本体**: [`docs/`](docs/) ← このフォルダを丸ごとコピーすれば USB メモリでも動きます
+- **アプリ本体**: リポジトリ直下の `index.html` / `css/` / `js/`（フォルダを丸ごとコピーすれば USB メモリでも動きます）
 
 ![待機画面](screenshots/01-待機画面.png)
 
 ## 使い方
 
-1. デモURLを開く（または `docs/index.html` をダブルクリック／`docs/start-fullscreen.bat` で Edge を全画面起動）
+1. デモURLを開く（または `index.html` をダブルクリック／`start-fullscreen.bat` で Edge を全画面起動）
 2. 「くじスタート！」を押す（スペースキー / Enter でも可）
 3. 回転中に **連打** または **押しっぱなし** でパワーをためる → 結果表示（画面タッチ／スペースキーで閉じる）
 4. 管理メニューは画面右上の ⚙ → パスワード（初期値 `0000`）
+
+## 管理メニュー（お試し用）
+
+画面右上の **⚙** を押してパスワードを入力すると管理メニューが開きます。**初期パスワードは `0000`** です。
+
+- タブ構成：「残数・状況」「景品設定」「日付・リセット」「履歴・集計」「その他」
+- 「景品設定」で賞の名前・景品・色・本数・演出を変更、「日付・リセット」で2日目への切替やテスト用リセットができます
+- パスワードは「その他」タブで変更できます（空欄にするとパスワードなし。実際の運用では開店前に変更するのをおすすめします）
 
 ## 機能
 
@@ -44,13 +52,12 @@
 ## ファイル構成
 
 ```
-docs/         GitHub Pages で公開しているアプリ本体
-  index.html            画面
-  css/style.css         見た目
-  js/app.js             動作（抽選・ガラポン・演出・効果音・管理メニュー）
-  start-fullscreen.bat  Edge で全画面起動（Windows）
-  README.md             説明書・運用メモ
-screenshots/  この README 用のスクリーンショット
+index.html            画面（GitHub Pages はこのリポジトリのルートを配信しています）
+css/style.css         見た目
+js/app.js             動作（抽選・ガラポン・演出・効果音・管理メニュー）
+start-fullscreen.bat  Edge で全画面起動（Windows）
+説明書.md              詳しい説明・当日の運用メモ
+screenshots/          この README 用のスクリーンショット
 ```
 
-詳しい説明は [docs/README.md](docs/README.md) を参照してください。
+詳しい説明は [説明書.md](説明書.md) を参照してください。

@@ -34,7 +34,7 @@
     lose: 'ハズレ扱い',
   };
   const FX_MODES = {
-    dopamine: 'ドパミン全開（連打ゲージ・予告カットイン・カプセル演出）',
+    dopamine: 'ドーパミン全開（連打ゲージ・予告カットイン・カプセル演出）',
     simple: 'シンプル（すぐ結果が出る・混雑時向け）',
   };
   const TIER = { lose: 0, normal: 1, big: 2, jackpot: 3 };
@@ -238,7 +238,7 @@
         notes([[67, 0, .35], [66, .4, .35], [65, .8, .35]], { type: 'triangle', vol: 0.2 });
         tone(midi(64), 1.2, 1.0, { type: 'triangle', vol: 0.2, slide: 0.94 });
       },
-      // ---- ドパミン演出用 ----
+      // ---- ドーパミン演出用 ----
       mash(n) { if (ok()) tone(midi(60 + Math.min(n, 36)), 0, 0.07, { type: 'square', vol: 0.07 }); },
       chance() {
         if (!ok()) return;
@@ -614,7 +614,7 @@
   })();
 
   // ======================================================================
-  // ドパミン演出（連打ゲージ・予告カットイン・ガチャ風カプセル）
+  // ドーパミン演出（連打ゲージ・予告カットイン・ガチャ風カプセル）
   //   ※ すべて見た目だけ。当選結果はボタンを押した瞬間に決まっている。
   // ======================================================================
   const Hype = (() => {
@@ -998,7 +998,7 @@
         await Garapon.dropBall(prize.color, prize.effect === 'jackpot');
         await sleep(prize.effect === 'jackpot' ? 700 : 300);
       } else {
-        // ドパミン全開モード：連打 → 予告 → ？玉 → カプセル → 結果
+        // ドーパミン全開モード：連打 → 予告 → ？玉 → カプセル → 結果
         const plan = Hype.plan(prize);
         Hype.startMash(ms);
         updateStartBtn();
