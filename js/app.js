@@ -48,11 +48,12 @@
       sound: true,
       spinSeconds: 3.5,
       fxMode: 'dopamine', // 'dopamine' = 連打・予告・カプセル演出あり / 'simple' = すぐ結果
+      // 1日あたりの本数（[...]は [1日目, 2日目]）。A賞3 + B賞27 + C賞120 + D賞150 = 300本/日
       prizes: [
         { id: 'A', name: 'A賞', item: '', color: '#e53935', counts: [3, 3], showRemaining: true, effect: 'jackpot' },
-        { id: 'B', name: 'B賞', item: '', color: '#fb8c00', counts: [10, 10], showRemaining: true, effect: 'big' },
-        { id: 'C', name: 'C賞', item: '', color: '#43a047', counts: [30, 30], showRemaining: false, effect: 'normal' },
-        { id: 'D', name: 'D賞', item: '', color: '#1e88e5', counts: [57, 57], showRemaining: false, effect: 'normal' },
+        { id: 'B', name: 'B賞', item: '', color: '#fb8c00', counts: [27, 27], showRemaining: true, effect: 'big' },
+        { id: 'C', name: 'C賞', item: '', color: '#43a047', counts: [120, 120], showRemaining: false, effect: 'normal' },
+        { id: 'D', name: 'D賞', item: '', color: '#1e88e5', counts: [150, 150], showRemaining: false, effect: 'normal' },
         { id: 'Z', name: 'ハズレ', item: '', color: '#9e9e9e', counts: [0, 0], showRemaining: false, effect: 'lose' },
       ],
       history: [], // { id: 賞ID, day: 1|2, t: 時刻(ms) }
