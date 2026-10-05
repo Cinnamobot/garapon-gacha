@@ -54,7 +54,7 @@
         { id: 'B', name: 'B賞', item: '', color: '#fb8c00', counts: [27, 27], showRemaining: true, effect: 'big' },
         { id: 'C', name: 'C賞', item: '', color: '#43a047', counts: [120, 120], showRemaining: false, effect: 'normal' },
         { id: 'D', name: 'D賞', item: '', color: '#1e88e5', counts: [150, 150], showRemaining: false, effect: 'normal' },
-        { id: 'Z', name: 'ハズレ', item: '', color: '#9e9e9e', counts: [0, 0], showRemaining: false, effect: 'lose' },
+        // { id: 'Z', name: 'ハズレ', item: '', color: '#9e9e9e', counts: [0, 0], showRemaining: false, effect: 'lose' },
       ],
       history: [], // { id: 賞ID, day: 1|2, t: 時刻(ms) }
     };
