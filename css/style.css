@@ -472,7 +472,9 @@ button { font-family: inherit; }
 }
 
 /* 最後の1個が出たとき */
-.remain-list li.soldout { position: relative; animation: soldout-fade .6s ease-in 2.2s forwards; }
+.remain-list li.soldout { position: relative; animation: soldout-fade .6s ease-in var(--fade, 2.2s) forwards; }
+/* 再描画でスタンプを押し直さないように、2回目以降はアニメーションなしで最終状態を出す */
+.remain-list li.soldout.done::after { animation: none; opacity: 1; transform: translate(-50%, -50%) rotate(-12deg); }
 .remain-list li.soldout .ball, .remain-list li.soldout .info, .remain-list li.soldout .left { filter: grayscale(1); opacity: .45; }
 .remain-list li.soldout::after {
   content: "完売!!";

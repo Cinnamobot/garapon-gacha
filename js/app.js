@@ -17,7 +17,7 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-  const toInt = v => Math.max(0, Math.floor(Number(v)) || 0);
+  const toInt = v => Math.min(1e6, Math.max(0, Math.floor(Number(v)) || 0)); // 本数・残り数用（上限は異常値よけ）
   const clone = v => JSON.parse(JSON.stringify(v));
   const pad2 = n => String(n).padStart(2, '0');
   const fmtTime = t => { const d = new Date(t); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`; };
@@ -63,14 +63,17 @@
   function normalize(s) {
     const d = defaultState();
     if (!s || typeof s !== 'object') return d;
-    // 残り数は id 単位で数えるため、id が空・重複している賞には新しい id を振る
+    // 残り数は id 単位で数えるため、id が空・重複している賞には新しい id を振る（履歴側も付け替える）
     const usedIds = new Set();
+    const idRemap = new Map();   // 旧ID → 新ID（どの賞にも引き継がれなかったIDだけ）
     const prizes = Array.isArray(s.prizes) && s.prizes.length
       ? s.prizes.map(p => {
-          let id = String(p.id ?? '');
+          const oldId = String(p.id ?? '');
+          let id = oldId;
           if (!id || usedIds.has(id)) id = newId();
           while (usedIds.has(id)) id = newId();
           usedIds.add(id);
+          if (oldId !== id && !idRemap.has(oldId)) idRemap.set(oldId, id);
           return {
             id,
             name: String(p.name ?? ''),
@@ -78,10 +81,11 @@
             color: /^#[0-9a-f]{6}$/i.test(p.color) ? p.color : '#999999',
             counts: [toInt(p.counts?.[0]), toInt(p.counts?.[1])],
             showRemaining: !!p.showRemaining,
-            effect: EFFECTS[p.effect] ? p.effect : 'normal',
+            effect: Object.hasOwn(EFFECTS, p.effect) ? p.effect : 'normal',
           };
         })
       : d.prizes;
+    prizes.forEach(p => idRemap.delete(p.id)); // 残った賞が使っているIDは付け替えない
     return {
       version: 1,
       title: typeof s.title === 'string' && s.title.trim() ? s.title : d.title,
@@ -89,18 +93,21 @@
       pin: typeof s.pin === 'string' ? s.pin : d.pin,
       sound: s.sound !== false,
       spinSeconds: clamp(Number(s.spinSeconds) || d.spinSeconds, 1, 8),
-      fxMode: FX_MODES[s.fxMode] ? s.fxMode : d.fxMode,
+      fxMode: Object.hasOwn(FX_MODES, s.fxMode) ? s.fxMode : d.fxMode,
       prizes,
       history: Array.isArray(s.history)
-        ? s.history.filter(h => h && h.id != null).map(h => ({ id: String(h.id), day: h.day === 2 ? 2 : 1, t: Number(h.t) || 0 }))
+        ? s.history.filter(h => h && h.id != null).map(h => ({ id: idRemap.get(String(h.id)) ?? String(h.id), day: h.day === 2 ? 2 : 1, t: Number(h.t) || 0 }))
         : [],
     };
   }
 
+  let storeSnapshot = null;   // 最後に読み書きした保存内容（他ウィンドウの更新検出用）
+  let saveBroken = false;     // 保存に失敗した（localStorage が使えない）
+
   function loadState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return normalize(JSON.parse(raw));
+      if (raw) { storeSnapshot = raw; return normalize(JSON.parse(raw)); }
     } catch (e) {
       console.warn('保存データの読み込みに失敗しました', e);
     }
@@ -111,10 +118,25 @@
 
   function save() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      const raw = JSON.stringify(state);
+      localStorage.setItem(STORAGE_KEY, raw);
+      storeSnapshot = raw;
+      saveBroken = false;
     } catch (e) {
+      saveBroken = true;
       alert('データの保存に失敗しました: ' + e.message);
     }
+  }
+
+  // 他ウィンドウの保存内容が変わっていたら取り込む（古い内容で上書きしないため）。取り込んだら true
+  function syncFromStore() {
+    if (saveBroken) return false;
+    let raw = null;
+    try { raw = localStorage.getItem(STORAGE_KEY); } catch (e) { return false; }
+    if (raw === storeSnapshot) return false;
+    state = loadState();
+    prevShown.clear();
+    return true;
   }
 
   const prizeById = id => state.prizes.find(p => p.id === id);
@@ -130,6 +152,8 @@
 
   // 偏りのない乱数 (0 <= r < n)
   function randomInt(n) {
+    if (!(n > 0)) return 0;
+    if (n > 0x100000000) n = 0x100000000; // 極端な本数でも棄却ループから抜けられるように
     const buf = new Uint32Array(1);
     const limit = Math.floor(0x100000000 / n) * n;
     let v;
@@ -720,7 +744,7 @@
     // 連打すればその間隔より速くカウントされるので、連打の気持ちよさはそのまま。
     const held = new Set();
     function holdStart(x, y, id) {
-      if (!mashing) return;
+      if (!mashing || held.has(id)) return;   // 同じ指・同じキーの押しっぱなしは1回だけ開始する
       held.add(id);
       mash(x, y);
       if (!holdTimer) holdTimer = setInterval(() => mash(), holdMs);
@@ -850,9 +874,9 @@
   let resultOpen = false;
   let resultShownAt = 0;
   let lastClosedAt = 0;
-  let syncPending = false;   // 抽選中に他ウィンドウで変更があった（結果を閉じたときに反映する）
   const prevShown = new Map(); // 賞ID → 前回表示した残数（数字が減ったときのアニメ用）
-  const soldOut = new Set();   // 「完売!!」ハンコを表示中の賞ID
+  const soldOut = new Map();   // 「完売!!」ハンコを表示中の賞ID → 押した時刻
+  const SOLD_OUT_MS = 2800;    // ハンコを出してから一覧から消えるまで
 
   function renderHeader() {
     $('#title').textContent = state.title;
@@ -863,20 +887,27 @@
 
   // 当たり景品リスト：残っている当たりだけを表示し、0 個になったら消す
   function renderRemain() {
+    const now = performance.now();
+    // 「完売!!」ハンコの表示時間が過ぎた賞を先に片付ける
+    for (const [id, at] of soldOut) if (now - at >= SOLD_OUT_MS) soldOut.delete(id);
     // さっきまで残っていて 0 個になった賞は「完売!!」ハンコを押してから消す
     for (const [id, was] of prevShown) {
       const p = prizeById(id);
       if (p && was > 0 && remaining(p) === 0 && !soldOut.has(id)) {
-        soldOut.add(id);
+        soldOut.set(id, now);
         // 抽選中に描き直すと次の結果がバレるので、抽選中は結果を閉じたときに任せる
-        setTimeout(() => { soldOut.delete(id); if (!busy) renderRemain(); }, 2800);
+        setTimeout(() => { soldOut.delete(id); if (!busy) renderRemain(); }, SOLD_OUT_MS);
       }
     }
     const list = state.prizes.filter(p => !isLose(p) && (remaining(p) > 0 || soldOut.has(p.id)));
     $('#remainList').innerHTML = list.map(p => {
       const r = remaining(p);
       const bump = prevShown.has(p.id) && prevShown.get(p.id) !== r ? 'bump' : '';
-      return `<li style="--c:${p.color}" class="${r === 0 ? 'soldout' : ''}">
+      // 完売の行は、再描画でスタンプを押し直さないように残り時間でフェードを張り直す
+      const elapsed = r === 0 ? now - (soldOut.get(p.id) ?? now) : 0;
+      const cls = r === 0 ? (elapsed < 400 ? 'soldout' : 'soldout done') : '';
+      const style = r === 0 ? `--c:${p.color};--fade:${Math.max(0, SOLD_OUT_MS - elapsed - 600)}ms` : `--c:${p.color}`;
+      return `<li style="${style}" class="${cls}">
           <span class="ball"></span>
           <div class="info">
             <div class="pname">${esc(p.name)}</div>
@@ -888,7 +919,12 @@
     }).join('');
     prevShown.clear();
     list.forEach(p => { if (remaining(p) > 0) prevShown.set(p.id, remaining(p)); });
-    $('#remainEmpty').classList.toggle('hidden', list.length > 0);
+    const emptyEl = $('#remainEmpty');
+    emptyEl.classList.toggle('hidden', list.length > 0);
+    // ハズレくじが残っているときは「まだ引ける」ことが分かるようにする
+    emptyEl.innerHTML = totalRemaining() > 0
+      ? '当たりはすべて出ました！<br>ハズレくじは まだ引けます'
+      : '当たりはすべて出ました！<br>ありがとうございました！';
     renderTicker();
   }
 
@@ -923,7 +959,10 @@
     if (loseStreak >= 2) out.push(`😱 ハズレ ${loseStreak} 連続…次は当たる!!`);
     if (winStreak >= 2) out.push(`🔥 当たり ${winStreak} 連続!! 好調!!`);
     if (winOnly.some(p => remaining(p) === 1)) out.push('⚠️ 残りわずか!! お早めにどうぞ!!');
-    if (gone.length) out.push(`😢 ${gone[0].name} は完売しました…`);
+    // 完売の告知は「直近に尽きた賞」を名指しする（一覧の並び順で先頭固定にしない）
+    const goneIds = new Set(gone.map(p => p.id));
+    const lastGone = [...today].reverse().find(h => goneIds.has(h.id));
+    if (lastGone) out.push(`😢 ${nameOf(lastGone.id)} は完売しました…`);
     if (rest > 0 && rest <= 5) out.push(`⏳ 本日のこり ${rest} 本!!`);
     return out;
   }
@@ -978,6 +1017,8 @@
 
   async function startDraw() {
     if (busy || resultOpen || Admin.isOpen() || performance.now() - lastClosedAt < 400) return;
+    // 他ウィンドウで引かれた記録を取りこぼさない（保存内容が変わっていたら先に取り込む）
+    if (syncFromStore()) refreshMain();
     const prize = drawPrize();
     if (!prize) { updateStartBtn(); return; }
 
@@ -986,13 +1027,12 @@
     state.history.push({ id: prize.id, day: state.day, t: Date.now() });
     save();
 
-    Sound.unlock();
-    requestWakeLock();
-    Garapon.clearBall();
-    const ms = state.spinSeconds * 1000;
-
     // 演出中に例外が出ても busy を立てたままにしない（当選は保存済みなので結果は必ず出す）
     try {
+      Sound.unlock();
+      requestWakeLock();
+      Garapon.clearBall();
+      const ms = state.spinSeconds * 1000;
       if (state.fxMode === 'simple') {
         updateStartBtn();
         await Garapon.spin(ms);
@@ -1015,7 +1055,16 @@
       Hype.cancel();
       Garapon.clearBall();
     }
-    showResult(prize);
+    // 結果表示も守る（ここで例外が出ても「抽選中…」のまま操作不能にしない）
+    try {
+      showResult(prize);
+    } catch (err) {
+      console.error('結果表示に失敗しました', err);
+      busy = false;
+      resultOpen = false;
+      resultEl.classList.add('hidden');
+      updateStartBtn();
+    }
   }
 
   const RESULT_RANK = { jackpot: '✦ 超激レア ✦', big: '激レア', normal: 'レア', lose: '' };
@@ -1061,15 +1110,10 @@
     lastClosedAt = performance.now();
     resultEl.classList.add('hidden');
     app.classList.remove('shake');
+    // 演出中に他ウィンドウで引かれた分をここで取り込む（古い内容で上書きしないため）
+    if (syncFromStore()) { renderHeader(); Garapon.refreshBalls(); }
     FX.stop();
     Garapon.clearBall();
-    if (syncPending) { // 演出中に他ウィンドウで引かれた分をここで取り込む（古い内容で上書きしないため）
-      syncPending = false;
-      state = loadState();
-      prevShown.clear();
-      renderHeader();
-      Garapon.refreshBalls();
-    }
     renderRemain(); // 結果を見せてから残り数を減らす（裏でネタバレしない）
     updateStartBtn();
   }
@@ -1168,6 +1212,13 @@
     function render() {
       $$('#adminTabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
       body.innerHTML = VIEWS[tab]();
+    }
+    // 別ウィンドウの変更を管理メニューにも反映する（編集中なら確認してから捨てる）
+    function syncFromStorage() {
+      if (!isOpen()) return;
+      if (dirty && !confirm('別のウィンドウで設定が変更されました。編集中の内容を破棄して最新の内容を読み直しますか？')) return;
+      draft = null; dirty = false;
+      render();
     }
     function changed() { save(); render(); refreshMain(); }
 
@@ -1447,7 +1498,7 @@
     $('#adminTabs').addEventListener('click', e => { if (e.target.dataset.tab) switchTab(e.target.dataset.tab); });
     $('#adminClose').addEventListener('click', close);
 
-    return { open, close, isOpen };
+    return { open, close, isOpen, syncFromStorage };
   })();
 
   // ======================================================================
@@ -1471,7 +1522,9 @@
   $('#adminBtn').addEventListener('click', e => { e.currentTarget.blur(); if (!busy) Pin.ask(Admin.open); });
   $('#soundBtn').addEventListener('click', e => {
     e.currentTarget.blur();
-    state.sound = !state.sound;
+    const next = !state.sound;
+    syncFromStore(); // 抽選中に他ウィンドウで引かれた記録を消さないよう、保存の前に取り込む
+    state.sound = next;
     save();
     renderHeader();
     if (state.sound) Sound.chime();
@@ -1486,8 +1539,12 @@
     if (Pin.isOpen()) { if (e.key === 'Escape') Pin.close(); return; }
     if (Admin.isOpen()) { if (e.key === 'Escape') Admin.close(); return; }
     if (e.code === 'Space' || e.key === 'Enter') {
+      // 画面に出ているボタンにフォーカスがあるときは、そのボタンの操作（Space/Enterでの押下）を優先する
+      const el = document.activeElement;
+      if (el && el !== startBtn && el.tagName === 'BUTTON' && el.getClientRects().length) return;
       e.preventDefault();
-      if (e.repeat) return;
+      // 押しっぱなし（キーの自動リピート）でもゲージをためられるようにする
+      if (e.repeat) { if (Hype.isMashing()) Hype.holdStart(null, null, e.code); return; }
       if (resultOpen) closeResult();
       else if (Hype.isMashing()) Hype.holdStart(null, null, e.code);
       else if (Hype.isCapsuleOpen()) Hype.tap();
@@ -1501,9 +1558,10 @@
   // 別タブ・別ウィンドウで同じアプリを開いていた場合も表示をそろえる
   addEventListener('storage', e => {
     if (e.key !== STORAGE_KEY) return;
-    // 抽選中に描き直すと次の結果がバレるので、閉じたときに反映する（イベントは捨てない）
-    if (busy) { syncPending = true; return; }
-    state = loadState();
+    // 抽選中に描き直すと次の結果がバレるので、閉じたとき（closeResult）に任せる
+    if (busy) return;
+    if (!syncFromStore()) return;
+    Admin.syncFromStorage();
     refreshMain();
   });
 
