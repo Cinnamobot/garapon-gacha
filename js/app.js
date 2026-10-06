@@ -875,8 +875,8 @@
   let resultShownAt = 0;
   let lastClosedAt = 0;
   const prevShown = new Map(); // 賞ID → 前回表示した残数（数字が減ったときのアニメ用）
-  const soldOut = new Map();   // 「完売!!」ハンコを表示中の賞ID → 押した時刻
-  const SOLD_OUT_MS = 2800;    // ハンコを出してから一覧から消えるまで
+  const stamping = new Map();  // 「完売!!」ハンコ演出中の賞ID → 押した時刻（行は消さない）
+  const STAMP_MS = 1500;       // ハンコ演出の長さ
 
   function renderHeader() {
     $('#title').textContent = state.title;
@@ -885,46 +885,44 @@
     $('#soundBtn').textContent = state.sound ? '🔊' : '🔇';
   }
 
-  // 当たり景品リスト：残っている当たりだけを表示し、0 個になったら消す
+  // 当たり景品リスト：完売した賞も一覧に残し、在庫数の代わりに「完売!!」を出す
   function renderRemain() {
     const now = performance.now();
-    // 「完売!!」ハンコの表示時間が過ぎた賞を先に片付ける
-    for (const [id, at] of soldOut) if (now - at >= SOLD_OUT_MS) soldOut.delete(id);
-    // さっきまで残っていて 0 個になった賞は「完売!!」ハンコを押してから消す
+    // 「完売!!」ハンコの演出が終わった記録を片付ける（行は残す）
+    for (const [id, at] of stamping) if (now - at >= STAMP_MS) stamping.delete(id);
+    // さっきまで残っていた賞が 0 個になったらハンコを押す（演出は1回だけ）
     for (const [id, was] of prevShown) {
       const p = prizeById(id);
-      if (p && was > 0 && remaining(p) === 0 && !soldOut.has(id)) {
-        soldOut.set(id, now);
+      if (p && was > 0 && remaining(p) === 0 && !stamping.has(id)) {
+        stamping.set(id, now);
         // 抽選中に描き直すと次の結果がバレるので、抽選中は結果を閉じたときに任せる
-        setTimeout(() => { soldOut.delete(id); if (!busy) renderRemain(); }, SOLD_OUT_MS);
+        setTimeout(() => { stamping.delete(id); if (!busy) renderRemain(); }, STAMP_MS);
       }
     }
-    const list = state.prizes.filter(p => !isLose(p) && (remaining(p) > 0 || soldOut.has(p.id)));
+    const list = state.prizes.filter(p => !isLose(p));
     $('#remainList').innerHTML = list.map(p => {
       const r = remaining(p);
       const bump = prevShown.has(p.id) && prevShown.get(p.id) !== r ? 'bump' : '';
-      // 完売の行は、再描画でスタンプを押し直さないように残り時間でフェードを張り直す
-      const elapsed = r === 0 ? now - (soldOut.get(p.id) ?? now) : 0;
-      const cls = r === 0 ? (elapsed < 400 ? 'soldout' : 'soldout done') : '';
-      const style = r === 0 ? `--c:${p.color};--fade:${Math.max(0, SOLD_OUT_MS - elapsed - 600)}ms` : `--c:${p.color}`;
-      return `<li style="${style}" class="${cls}">
+      const sold = r === 0;
+      // ハンコは押した直後だけアニメーションし、再描画で再生しないよう残り時間で切り替える
+      const elapsed = stamping.has(p.id) ? now - stamping.get(p.id) : Infinity;
+      const cls = [sold ? 'soldout' : '', elapsed < 400 ? 'stamping' : elapsed < STAMP_MS ? 'stamping done' : ''].filter(Boolean).join(' ');
+      return `<li style="--c:${p.color}" class="${cls}">
           <span class="ball"></span>
           <div class="info">
             <div class="pname">${esc(p.name)}</div>
             ${p.item ? `<div class="pitem">${esc(p.item)}</div>` : ''}
-            ${p.showRemaining && r === 1 ? '<span class="hurry last">🔥 ラスト1!! 🔥</span>' : p.showRemaining && r > 1 && r <= 3 ? '<span class="hurry">残りわずか!!</span>' : ''}
+            ${p.showRemaining && !sold && r === 1 ? '<span class="hurry last">🔥 ラスト1!! 🔥</span>' : p.showRemaining && !sold && r > 1 && r <= 3 ? '<span class="hurry">残りわずか!!</span>' : ''}
           </div>
-          ${p.showRemaining ? `<div class="left">あと<b class="${bump}">${r}</b>個</div>` : ''}
+          ${sold ? '<div class="remain-sold">完売!!</div>' : p.showRemaining ? `<div class="left">あと<b class="${bump}">${r}</b>個</div>` : ''}
         </li>`;
     }).join('');
     prevShown.clear();
     list.forEach(p => { if (remaining(p) > 0) prevShown.set(p.id, remaining(p)); });
+    // 当たり賞が1つも登録されていないときだけメッセージを出す
     const emptyEl = $('#remainEmpty');
     emptyEl.classList.toggle('hidden', list.length > 0);
-    // ハズレくじが残っているときは「まだ引ける」ことが分かるようにする
-    emptyEl.innerHTML = totalRemaining() > 0
-      ? '当たりはすべて出ました！<br>ハズレくじは まだ引けます'
-      : '当たりはすべて出ました！<br>ありがとうございました！';
+    emptyEl.textContent = '当たり景品がありません';
     renderTicker();
   }
 
@@ -1290,7 +1288,7 @@
           <p class="note">
             ・「1日目の数」「2日目の数」はその日に箱に入れるくじの本数です。くじは残っている本数から公平に1本ずつ引かれます。<br>
             ・「ハズレ」の数を増やすと当たりが出にくくなります。来場者数の見込みに合わせて調整してください（0 なら必ず何か当たります）。<br>
-            ・「あと○個を表示」にチェックした賞は、メイン画面に残り数が出ます。0 個になると表示が消えます。<br>
+            ・「あと○個を表示」にチェックした賞は、メイン画面に残り数が出ます。0 個になった賞は「完売!!」表示に変わり、一覧には残ります。<br>
             ・演出「超ハデ」は花火・ファンファーレ付き、「ハズレ扱い」は当たり一覧に表示されません。<br>
             ・今日すでに出た数より少なくすると、その賞の残りは 0 になります。
           </p>`;

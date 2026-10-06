@@ -471,12 +471,23 @@ button { font-family: inherit; }
   animation: flash .6s ease-out forwards;
 }
 
-/* 最後の1個が出たとき */
-.remain-list li.soldout { position: relative; animation: soldout-fade .6s ease-in var(--fade, 2.2s) forwards; }
-/* 再描画でスタンプを押し直さないように、2回目以降はアニメーションなしで最終状態を出す */
-.remain-list li.soldout.done::after { animation: none; opacity: 1; transform: translate(-50%, -50%) rotate(-12deg); }
-.remain-list li.soldout .ball, .remain-list li.soldout .info, .remain-list li.soldout .left { filter: grayscale(1); opacity: .45; }
-.remain-list li.soldout::after {
+/* 完売した賞：行は残し、在庫数の代わりに「完売!!」を出す */
+.remain-list li.soldout .ball, .remain-list li.soldout .info { filter: grayscale(1); opacity: .45; }
+.remain-list .remain-sold {
+  flex: none;
+  padding: .3vh 1.2vw;
+  border: .4vh solid #d50000;
+  border-radius: 999px;
+  color: #d50000;
+  background: rgba(255, 255, 255, .9);
+  font-size: clamp(14px, 2.6vh, 34px);
+  font-weight: 900;
+  letter-spacing: .08em;
+  white-space: nowrap;
+}
+/* 完売した瞬間のハンコ演出（1回だけ・行は消さない） */
+.remain-list li.stamping { position: relative; }
+.remain-list li.stamping::after {
   content: "完売!!";
   position: absolute;
   top: 50%;
@@ -491,6 +502,8 @@ button { font-family: inherit; }
   letter-spacing: .1em;
   animation: stamp .45s cubic-bezier(.3, 1.6, .5, 1) .2s both;
 }
+/* 再描画でハンコを押し直さないように、2回目以降はアニメーションなしで最終状態を出す */
+.remain-list li.stamping.done::after { animation: none; opacity: 1; transform: translate(-50%, -50%) rotate(-12deg); }
 #garapon.glow-rainbow { animation: hue 1s linear infinite; }
 
 .blackout {
@@ -1058,7 +1071,6 @@ hr { margin: 24px 0; border: none; border-top: 1px solid #eee; }
   100% { transform: translate(-50%, -140%) scale(1); opacity: 0; }
 }
 @keyframes stamp { 0% { transform: translate(-50%, -50%) scale(3) rotate(-25deg); opacity: 0; } 100% { transform: translate(-50%, -50%) scale(1) rotate(-12deg); opacity: 1; } }
-@keyframes soldout-fade { to { opacity: 0; transform: translateX(40px); } }
 @keyframes fade-in-half { to { opacity: .5; } }
 @keyframes lose-drop {
   0% { transform: translateY(-60vh) rotate(0); opacity: 0; }
